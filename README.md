@@ -7,6 +7,11 @@
 - 必要时联网检索增强
 - 学习表现写入后台 Memory，并可直接生成能力报告
 
+## README 冲突说明（已处理）
+
+- 现在只有**项目根目录 `README.md`**作为唯一产品/工程说明。
+- `backend/.pytest_cache/README.md` 是测试工具自动生成的缓存文件，非项目文档，已清理并加入忽略规则。
+
 ## 已实现接口
 
 - `GET /health`
@@ -59,6 +64,16 @@ curl -X POST http://localhost:8000/practice/submit \
 curl 'http://localhost:8000/memory/profile?user_id=stu_001&subject=math'
 curl 'http://localhost:8000/memory/report?user_id=stu_001&subject=math'
 ```
+
+## 现在该做什么（下一步）
+
+1. **先打通真实模型联调**：用你的 API Key 测 `POST /math/solve`，确认模型响应结构稳定。
+2. **补前端最小页面**：先做 1 页（题目输入 + 解题结果 + 提交练习）。
+3. **接语音链路**：新增听写接口（TTS/ASR）并把结果写入同一套 Memory。
+4. **上线前必做**：
+   - API Key 加密存储
+   - 速率限制（防刷）
+   - 结构化日志与错误告警
 
 ## 深化内容（本次新增）
 
