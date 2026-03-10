@@ -18,9 +18,11 @@
 - `GET /subjects`：返回当前支持学科（math / english / chinese）
 - `POST /math/solve`：通用解题（含可选检索增强）
 - `POST /math/generate`：通用出题
+- `POST /dictation/start`：启动听写会话（返回 session_id 与播报文本）
+- `POST /dictation/submit`：提交听写文本并评分（可接 ASR 结果）
 - `POST /practice/submit`：提交练习结果（进入 Memory）
 - `GET /memory/profile`：读取学生能力档案
-- `GET /memory/report`：读取能力评估报告（等级/趋势/建议）
+- `GET /memory/report`：读取能力评估报告（等级/趋势/建议+听写统计）
 
 ## 运行
 
@@ -54,26 +56,24 @@ curl -X POST http://localhost:8000/math/solve \
   }'
 ```
 
-### 提交练习并查看 Memory
+### 听写（文本版，后续可接语音识别）
 
 ```bash
-curl -X POST http://localhost:8000/practice/submit \
+curl -X POST http://localhost:8000/dictation/start \
   -H 'Content-Type: application/json' \
-  -d '{"user_id":"stu_001","subject":"math","total":10,"correct":8,"avg_duration_s":50,"notes":"定义域遗漏"}'
+  -d '{"user_id":"stu_001","subject":"english","content":"apple banana orange"}'
 
-curl 'http://localhost:8000/memory/profile?user_id=stu_001&subject=math'
-curl 'http://localhost:8000/memory/report?user_id=stu_001&subject=math'
+curl -X POST http://localhost:8000/dictation/submit \
+  -H 'Content-Type: application/json' \
+  -d '{"session_id":"SESSION_ID","user_id":"stu_001","subject":"english","reference_text":"apple banana orange","answer_text":"apple banan orange","duration_s":20}'
 ```
 
-## 现在该做什么（下一步）
+### 查看 Memory
 
-1. **先打通真实模型联调**：用你的 API Key 测 `POST /math/solve`，确认模型响应结构稳定。
-2. **补前端最小页面**：先做 1 页（题目输入 + 解题结果 + 提交练习）。
-3. **接语音链路**：新增听写接口（TTS/ASR）并把结果写入同一套 Memory。
-4. **上线前必做**：
-   - API Key 加密存储
-   - 速率限制（防刷）
-   - 结构化日志与错误告警
+```bash
+curl 'http://localhost:8000/memory/profile?user_id=stu_001&subject=math'
+curl 'http://localhost:8000/memory/report?user_id=stu_001&subject=english'
+```
 
 ## 深化内容（本次新增）
 
@@ -81,6 +81,7 @@ curl 'http://localhost:8000/memory/report?user_id=stu_001&subject=math'
 - JSON鲁棒解析：支持原始 JSON / fenced JSON / 文本中提取 JSON
 - 检索鲁棒性：检索失败时自动降级，不中断主流程
 - 能力报告：基于 Memory 输出等级（A/B/C）、趋势、建议
+- 听写闭环：新增听写 session + 文本评分 + 统计回写报告
 
 ## 目录
 

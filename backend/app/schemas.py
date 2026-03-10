@@ -91,6 +91,50 @@ class PracticeSubmitRequest(BaseModel):
         return value
 
 
+class DictationStartRequest(BaseModel):
+    user_id: str
+    subject: str = Field(default="english")
+    content: str = Field(min_length=1, description="待听写文本")
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"english", "chinese"}:
+            raise ValueError("dictation subject must be 'english' or 'chinese'")
+        return normalized
+
+
+class DictationStartResponse(BaseModel):
+    session_id: str
+    content: str
+    tts_text: str
+
+
+class DictationSubmitRequest(BaseModel):
+    session_id: str
+    user_id: str
+    subject: str = Field(default="english")
+    reference_text: str = Field(min_length=1)
+    answer_text: str = Field(min_length=1)
+    duration_s: int = Field(default=30, ge=1)
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"english", "chinese"}:
+            raise ValueError("dictation subject must be 'english' or 'chinese'")
+        return normalized
+
+
+class DictationSubmitResponse(BaseModel):
+    session_id: str
+    accuracy: float
+    wrong_tokens: list[str]
+    feedback: str
+
+
 class MemoryProfile(BaseModel):
     user_id: str
     subject: str
@@ -110,6 +154,8 @@ class MemoryReport(BaseModel):
     accuracy: float
     top_pitfalls: list[str]
     suggestions: list[str]
+    dictation_sessions: int
+    dictation_accuracy: float
 
 
 class HealthResponse(BaseModel):

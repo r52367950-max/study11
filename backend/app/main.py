@@ -1,11 +1,23 @@
 import json
+import secrets
+from difflib import SequenceMatcher
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from .db import build_report, get_profile, init_db, upsert_practice
+from .db import (
+    build_report,
+    get_profile,
+    init_db,
+    insert_dictation_record,
+    upsert_practice,
+)
 from .schemas import (
+    DictationStartRequest,
+    DictationStartResponse,
+    DictationSubmitRequest,
+    DictationSubmitResponse,
     GenerateRequest,
     GenerateResponse,
     HealthResponse,
@@ -17,7 +29,7 @@ from .schemas import (
 )
 from .tutor import generate_questions, solve_question
 
-app = FastAPI(title="AI Tutor API", version="0.3.0")
+app = FastAPI(title="AI Tutor API", version="0.4.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -86,6 +98,59 @@ async def math_generate(payload: GenerateRequest):
         questions=[str(x) for x in parsed.get("questions", [])][: payload.count],
         answers=[str(x) for x in parsed.get("answers", [])][: payload.count],
         explanations=[str(x) for x in parsed.get("explanations", [])][: payload.count],
+    )
+
+
+@app.post("/dictation/start", response_model=DictationStartResponse)
+def dictation_start(payload: DictationStartRequest):
+    session_id = secrets.token_urlsafe(8)
+    return DictationStartResponse(session_id=session_id, content=payload.content, tts_text=payload.content)
+
+
+@app.post("/dictation/submit", response_model=DictationSubmitResponse)
+def dictation_submit(payload: DictationSubmitRequest):
+    ref_tokens = payload.reference_text.strip().split()
+    ans_tokens = payload.answer_text.strip().split()
+
+    if payload.subject == "chinese":
+        ref_tokens = list(payload.reference_text.strip())
+        ans_tokens = list(payload.answer_text.strip())
+
+    wrong_tokens = [token for token in ref_tokens if token not in ans_tokens][:10]
+    similarity = SequenceMatcher(None, payload.reference_text, payload.answer_text).ratio()
+    accuracy = round(similarity, 3)
+
+    feedback = "整体不错，继续保持。"
+    if accuracy < 0.7:
+        feedback = "基础不稳，建议先做短句反复听写。"
+    elif wrong_tokens:
+        feedback = f"重点复习这些易错项：{', '.join(wrong_tokens[:3])}"
+
+    insert_dictation_record(
+        session_id=payload.session_id,
+        user_id=payload.user_id,
+        subject=payload.subject,
+        reference_text=payload.reference_text,
+        answer_text=payload.answer_text,
+        accuracy=accuracy,
+        wrong_tokens=wrong_tokens,
+        duration_s=payload.duration_s,
+    )
+
+    upsert_practice(
+        user_id=payload.user_id,
+        subject=payload.subject,
+        total=max(1, len(ref_tokens)),
+        correct=max(0, len(ref_tokens) - len(wrong_tokens)),
+        avg_duration_s=payload.duration_s,
+        pitfall_hint=wrong_tokens[0] if wrong_tokens else None,
+    )
+
+    return DictationSubmitResponse(
+        session_id=payload.session_id,
+        accuracy=accuracy,
+        wrong_tokens=wrong_tokens,
+        feedback=feedback,
     )
 
 

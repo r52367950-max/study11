@@ -28,6 +28,21 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS dictation_records (
+                session_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                reference_text TEXT NOT NULL,
+                answer_text TEXT NOT NULL,
+                accuracy REAL NOT NULL,
+                wrong_tokens TEXT NOT NULL DEFAULT '[]',
+                duration_s INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
 
 
 def upsert_practice(
@@ -100,6 +115,53 @@ def get_profile(user_id: str, subject: str):
         ).fetchone()
 
 
+def insert_dictation_record(
+    *,
+    session_id: str,
+    user_id: str,
+    subject: str,
+    reference_text: str,
+    answer_text: str,
+    accuracy: float,
+    wrong_tokens: list[str],
+    duration_s: int,
+) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO dictation_records
+            (session_id, user_id, subject, reference_text, answer_text, accuracy, wrong_tokens, duration_s)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session_id,
+                user_id,
+                subject,
+                reference_text,
+                answer_text,
+                accuracy,
+                json.dumps(wrong_tokens, ensure_ascii=False),
+                duration_s,
+            ),
+        )
+
+
+def get_dictation_stats(user_id: str, subject: str) -> tuple[int, float]:
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS sessions, AVG(accuracy) AS avg_accuracy
+            FROM dictation_records
+            WHERE user_id=? AND subject=?
+            """,
+            (user_id, subject),
+        ).fetchone()
+
+    sessions = int(row["sessions"] or 0)
+    avg_accuracy = float(row["avg_accuracy"] or 0.0)
+    return sessions, round(avg_accuracy, 3)
+
+
 def build_report(user_id: str, subject: str) -> dict | None:
     row = get_profile(user_id, subject)
     if not row:
@@ -131,6 +193,8 @@ def build_report(user_id: str, subject: str) -> dict | None:
     if pitfalls:
         suggestions.insert(0, f"优先攻克高频问题：{pitfalls[0]}。")
 
+    dictation_sessions, dictation_accuracy = get_dictation_stats(user_id, subject)
+
     return {
         "user_id": row["user_id"],
         "subject": row["subject"],
@@ -140,4 +204,6 @@ def build_report(user_id: str, subject: str) -> dict | None:
         "accuracy": round(accuracy, 3),
         "top_pitfalls": pitfalls,
         "suggestions": suggestions[:4],
+        "dictation_sessions": dictation_sessions,
+        "dictation_accuracy": dictation_accuracy,
     }

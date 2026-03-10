@@ -41,6 +41,36 @@ def test_practice_memory_roundtrip_and_report():
     assert len(report_data['suggestions']) >= 1
 
 
+def test_dictation_flow_and_report_fields():
+    start = client.post(
+        '/dictation/start',
+        json={'user_id': 'u2', 'subject': 'english', 'content': 'apple banana orange'},
+    )
+    assert start.status_code == 200
+    session_id = start.json()['session_id']
+
+    submit = client.post(
+        '/dictation/submit',
+        json={
+            'session_id': session_id,
+            'user_id': 'u2',
+            'subject': 'english',
+            'reference_text': 'apple banana orange',
+            'answer_text': 'apple banan orange',
+            'duration_s': 20,
+        },
+    )
+    assert submit.status_code == 200
+    body = submit.json()
+    assert 0 <= body['accuracy'] <= 1
+
+    report = client.get('/memory/report', params={'user_id': 'u2', 'subject': 'english'})
+    assert report.status_code == 200
+    report_data = report.json()
+    assert 'dictation_sessions' in report_data
+    assert 'dictation_accuracy' in report_data
+
+
 def test_invalid_subject_validation():
     res = client.post(
         '/practice/submit',
